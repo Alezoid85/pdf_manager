@@ -1,98 +1,51 @@
 import streamlit as st
-import io
-import zipfile
+import base64
 
-# --- CONFIGURAZIONE PAGINA E STILE ---
-st.set_page_config(page_title="Ale PDF Manager", layout="wide")
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="Ale PDF Visual Renamer", layout="wide")
 
-# CSS Personalizzato per sfondo bianco e testo blu scuro
 st.markdown("""
     <style>
-    /* Sfondo principale */
-    .stApp {
-        background-color: white;
-    }
-    /* Titoli e scritte in blu scuro */
-    h1, h2, h3, p, label, .stMarkdown {
-        color: #002D62 !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    /* Colore dei nomi dei file caricati */
-    .stText {
-        color: #002D62 !important;
-    }
-    /* Linea di separazione blu */
-    hr {
-        border: 1px solid #002D62;
-    }
+    .stApp { background-color: white; }
+    h1, h2, p, label { color: #002D62 !important; }
+    .css-1r6slb0 { border: 1px solid #002D62; border-radius: 5px; padding: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📄 PDF Renamer Professionale")
-st.write("Interfaccia semplificata per rinomina massiva.")
+def display_pdf(file_bytes):
+    # Funzione per mostrare il PDF nell'interfaccia
+    base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
 
-tipologie = ["ISP_AWB", "ISP_CMR", "ISP_MRN", "ISP_ESITO", "ISP_BDC", "ISP_POD"]
+st.title("📄 PDF Renamer con Anteprima")
+st.write("Carica i file, guarda l'anteprima a sinistra e scrivi il nome a destra.")
 
-# Area di caricamento
-uploaded_files = st.file_uploader("Trascina i PDF qui", type="pdf", accept_multiple_files=True)
+uploaded_files = st.file_uploader("Trascina qui i PDF", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
-    st.divider()
-    
-    # Intestazioni tabella
-    cols_h = st.columns([3, 2, 3, 2, 1])
-    cols_h[0].markdown("**Nome Originale**")
-    cols_h[1].markdown("**Tipologia**")
-    cols_h[2].markdown("**Valore (Excel)**")
-    cols_h[3].markdown("**Nuovo Nome**")
-    cols_h[4].markdown("**Azione**")
-
-    files_da_scaricare = []
-
     for i, file in enumerate(uploaded_files):
-        c1, c2, c3, c4, c5 = st.columns([3, 2, 3, 2, 1])
-        
-        # 1. Nome originale
-        c1.text(file.name)
-        
-        # 2. Menu a tendina
-        tipo = c2.selectbox(f"Tipo {i}", tipologie, label_visibility="collapsed", key=f"tipo_{i}")
-        
-        # 3. Valore (incollato da Excel)
-        valore = c3.text_input(f"Valore {i}", label_visibility="collapsed", key=f"val_{i}")
-        
-        # 4. Anteprima nome finale
-        nome_finale = f"{tipo}{valore}.pdf" if valore else ""
-        if nome_finale:
-            c4.code(nome_finale)
-            files_da_scaricare.append({"content": file.getvalue(), "name": nome_finale})
+        with st.container():
+            col_anteprima, col_dati = st.columns([1, 1])
             
-            # 5. Pulsante download singolo
-            c5.download_button(
-                label="💾",
-                data=file.getvalue(),
-                file_name=nome_finale,
-                mime="application/pdf",
-                key=f"btn_{i}"
-            )
-        else:
-            c4.write("---")
-
-    st.divider()
-
-    # --- DOWNLOAD MASSIVO ---
-    if len(files_da_scaricare) > 1:
-        st.subheader("📦 Download Massivo")
-        
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-            for f in files_da_scaricare:
-                zip_file.writestr(f["name"], f["content"])
-        
-        st.download_button(
-            label="SCARICA TUTTI I FILE (.ZIP)",
-            data=zip_buffer.getvalue(),
-            file_name="pdf_rinominati_ale.zip",
-            mime="application/zip",
-            use_container_width=True
-        )
+            with col_anteprima:
+                st.subheader(f"🔍 Anteprima: {file.name}")
+                display_pdf(file.getvalue())
+            
+            with col_dati:
+                st.subheader("✍️ Rinomina")
+                tipo = st.selectbox(f"Tipologia", ["AWB", "CMR", "BDC", "POD", "MRN"], key=f"tipo_{i}")
+                valore = st.text_input(f"Inserisci Numero/Riferimento", key=f"val_{i}")
+                
+                if valore:
+                    nuovo_nome = f"ISP_{tipo}_{valore}.pdf"
+                    st.info(f"Nuovo nome: **{nuovo_nome}**")
+                    
+                    st.download_button(
+                        label="💾 SCARICA PDF RINOMINATO",
+                        data=file.getvalue(),
+                        file_name=nuovo_nome,
+                        mime="application/pdf",
+                        key=f"dl_{i}"
+                    )
+            st.divider()
