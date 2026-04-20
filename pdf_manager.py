@@ -1,100 +1,92 @@
 import streamlit as st
 import base64
-import io
 
 # --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Ale PDF Visual Renamer", layout="wide")
+st.set_page_config(page_title="Ale PDF Manager", layout="wide")
 
-# CSS Personalizzato: Sfondo bianco e testi blu scuro
+# CSS per il "quadratino" di anteprima che appare al passaggio
 st.markdown("""
     <style>
-    .stApp {
-        background-color: white;
+    .stApp { background-color: white; }
+    h1, h2, h3, p, label { color: #002D62 !important; }
+    
+    /* Stile per il tooltip/anteprima */
+    .preview-container {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+        color: #002D62;
+        font-weight: bold;
+        text-decoration: underline;
     }
-    h1, h2, h3, p, label, .stMarkdown {
-        color: #002D62 !important;
-        font-family: 'Segoe UI', sans-serif;
-    }
-    /* Stile per il contenitore del PDF */
-    .pdf-container {
+
+    .preview-content {
+        display: none;
+        position: absolute;
+        z-index: 100;
         border: 2px solid #002D62;
-        border-radius: 10px;
+        background-color: white;
         padding: 5px;
-        background-color: #f9f9f9;
+        border-radius: 8px;
+        width: 400px;
+        height: 500px;
+        box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+    }
+
+    .preview-container:hover .preview-content {
+        display: block;
     }
     </style>
     """, unsafe_allow_html=True)
 
-def display_pdf(file_bytes):
-    """Funzione per generare l'anteprima del PDF nell'interfaccia"""
+def get_pdf_display(file_bytes):
+    """Genera il codice HTML per l'anteprima piccola"""
     base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
-    
-    # Usiamo il tag <embed> che è più supportato per i flussi di dati base64
-    pdf_display = f'''
-        <div class="pdf-container">
-            <embed
-                src="data:application/pdf;base64,{base64_pdf}"
-                width="100%"
-                height="700"
-                type="application/pdf"
-            >
+    return f'''
+        <div class="preview-container">
+            👁️ Passa qui per l'anteprima
+            <div class="preview-content">
+                <embed
+                    src="data:application/pdf;base64,{base64_pdf}#toolbar=0&navpanes=0&scrollbar=0"
+                    width="100%"
+                    height="100%"
+                    type="application/pdf"
+                >
+            </div>
         </div>
     '''
-    st.markdown(pdf_display, unsafe_allow_html=True)
 
-# --- INTERFACCIA PRINCIPALE ---
-st.title("📄 PDF Renamer con Anteprima")
-st.write("Carica i file, controlla il contenuto a sinistra e rinomina a destra.")
+st.title("📄 PDF Manager - Ale Edition")
+st.write("Versione ultra-rapida: passa il mouse sull'icona per vedere il documento.")
 
-# Caricamento file
-uploaded_files = st.file_uploader("Trascina qui i tuoi PDF aziendali", type="pdf", accept_multiple_files=True)
+uploaded_files = st.file_uploader("Carica i PDF", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
-    for i, file in enumerate(uploaded_files):
-        # Creiamo un contenitore per ogni file caricato
-        with st.container():
-            col_anteprima, col_dati = st.columns([1.2, 0.8])
-            
-            with col_anteprima:
-                st.subheader(f"🔍 Documento: {file.name}")
-                display_pdf(file.getvalue())
-            
-            with col_dati:
-                st.subheader("✍️ Dati Nuova Rinomina")
-                
-                # Selezione tipologia (le tue categorie ISP)
-                tipo = st.selectbox(
-                    f"Seleziona Tipo", 
-                    ["AWB", "CMR", "BDC", "POD", "MRN", "ESITO"], 
-                    key=f"tipo_{i}"
-                )
-                
-                # Inserimento codice (qui incollerai da Excel)
-                valore = st.text_input(
-                    f"Inserisci Numero Riferimento", 
-                    key=f"val_{i}",
-                    placeholder="Esempio: 12345678"
-                )
-                
-                if valore:
-                    nuovo_nome = f"ISP_{tipo}_{valore}.pdf"
-                    st.success(f"✅ Pronto per la rinomina:")
-                    st.code(nuovo_nome, language=None)
-                    
-                    # Pulsante di download per il singolo file rinominato
-                    st.download_button(
-                        label=f"💾 SCARICA {nuovo_nome}",
-                        data=file.getvalue(),
-                        file_name=nuovo_nome,
-                        mime="application/pdf",
-                        key=f"dl_{i}",
-                        use_container_width=True
-                    )
-                else:
-                    st.info("Inserisci un riferimento per generare il nuovo nome.")
-            
-            # Linea di separazione tra un file e l'altro
-            st.markdown("---")
+    # Intestazione Tabella
+    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+    c1.write("**Nome File**")
+    c2.write("**Anteprima Rapida**")
+    c3.write("**Nuovo Nome**")
+    c4.write("**Azione**")
+    st.divider()
 
-else:
-    st.info("In attesa di file da elaborare... Trascina i PDF sopra per iniziare.")
+    for i, file in enumerate(uploaded_files):
+        col_nome, col_preview, col_input, col_dl = st.columns([2, 2, 2, 2])
+        
+        with col_nome:
+            st.text(file.name)
+            
+        with col_preview:
+            # Qui appare il quadratino magico
+            st.components.v1.html(get_pdf_display(file.getvalue()), height=40)
+            
+        with col_input:
+            tipo = st.selectbox("Tipo", ["AWB", "CMR", "BDC", "POD"], key=f"t_{i}", label_visibility="collapsed")
+            valore = st.text_input("Codice", key=f"v_{i}", label_visibility="collapsed", placeholder="Incolla codice...")
+            
+        with col_dl:
+            if valore:
+                nome_finale = f"ISP_{tipo}_{valore}.pdf"
+                st.download_button("💾 Scarica", file.getvalue(), file_name=nome_finale, key=f"d_{i}")
+            else:
+                st.write("---")
