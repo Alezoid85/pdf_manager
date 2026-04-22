@@ -11,18 +11,25 @@ st.markdown("""
     .stApp { background-color: white; }
     h1, h2, h3, p, label, span { color: #002D62 !important; }
     
-    /* Popover Anteprima più grande e centrato */
+    /* Pannello Master (Impostazioni Rapide) */
+    div[data-testid="stExpander"] {
+        border: 2px solid #002D62 !important;
+        background-color: #f0f2f6 !important;
+        border-radius: 10px;
+    }
+    
+    /* Popover Anteprima più grande */
     div[data-testid="stPopoverContent"] {
         width: 600px !important;
         background-color: white !important;
         border: 2px solid #002D62 !important;
     }
     
-    /* Compattazione righe per meno scroll */
+    /* Compattazione righe */
     .stColumn { padding: 0.2rem 0rem !important; }
     div[data-testid="stVerticalBlock"] > div { gap: 0.5rem !important; }
     
-    /* Sidebar per lo scarico */
+    /* Sidebar */
     section[data-testid="stSidebar"] {
         background-color: #f0f2f6 !important;
         border-right: 2px solid #002D62;
@@ -45,13 +52,19 @@ def get_pdf_preview_image(file_bytes):
 # --- 2. INTERFACCIA ---
 st.title("📄 PDF Manager Turbo - Ale")
 
-# --- CONTROLLI MASSIVI (Per zittire gli scettici) ---
-with st.expander("🛠️ Impostazioni Veloci (Applica a tutti)", expanded=True):
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        master_tipo = st.selectbox("Seleziona tipo per TUTTI i file:", ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"])
-    with c2:
-        st.write("👉 *Seleziona un tipo qui sopra per non doverlo cliccare su ogni riga.*")
+# --- BLOCCO MASTER (La modifica che mancava) ---
+st.markdown("### 🛠️ Impostazioni Rapide")
+with st.expander("CLICCA QUI PER IMPOSTARE IL TIPO A TUTTI I FILE", expanded=True):
+    col_m1, col_m2 = st.columns([1, 2])
+    with col_m1:
+        # Questo comando controlla tutti i selectbox sotto
+        master_tipo = st.selectbox(
+            "Scegli tipo (es. CMR) per applicarlo a tutto l'elenco:", 
+            ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"],
+            index=0
+        )
+    with col_m2:
+        st.info("💡 Seleziona il tipo una volta sola qui sopra per risparmiare decine di clic.")
 
 uploaded_files = st.file_uploader("Trascina i PDF qui", type="pdf", accept_multiple_files=True)
 
@@ -59,6 +72,7 @@ if uploaded_files:
     files_to_zip = []
     
     st.markdown("---")
+    # Intestazioni Tabella compatta
     h1, h2, h3, h4 = st.columns([2, 0.6, 2.2, 1.2])
     h1.markdown("**File Originale**")
     h2.markdown("**Vedi**")
@@ -66,12 +80,17 @@ if uploaded_files:
     h4.markdown("**Azione**")
     st.markdown("---")
 
+    # Lista dei tipi per gestire l'index del selectbox
+    lista_tipi = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"]
+
     for i, file in enumerate(uploaded_files):
         col_nome, col_preview, col_input, col_dl = st.columns([2, 0.6, 2.2, 1.2])
         current_file_bytes = file.getvalue()
         
         with col_nome:
-            st.text(file.name[:35] + "..." if len(file.name) > 35 else file.name)
+            # Tronca nomi troppo lunghi
+            nome_corto = file.name[:30] + "..." if len(file.name) > 30 else file.name
+            st.text(nome_corto)
         
         with col_preview:
             with st.popover("👁️"):
@@ -84,22 +103,30 @@ if uploaded_files:
         with col_input:
             c_tipo, c_val = st.columns([0.4, 0.6])
             with c_tipo:
-                # Se il master_tipo è selezionato, lo usiamo come default
-                index_default = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"].index(master_tipo) if master_tipo != "-" else 0
-                tipo = st.selectbox("T", ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"], index=index_default, key=f"t_{i}", label_visibility="collapsed")
+                # SE IL MASTER È SELEZIONATO, USA QUELLO, ALTRIMENTI USA "-"
+                index_da_usare = lista_tipi.index(master_tipo) if master_tipo != "-" else 0
+                
+                tipo = st.selectbox(
+                    "T", 
+                    lista_tipi, 
+                    index=index_da_usare, 
+                    key=f"t_{i}", 
+                    label_visibility="collapsed"
+                )
             with c_val:
-                valore = st.text_input("Codice", key=f"v_{i}", label_visibility="collapsed", placeholder="Incolla codice...")
+                valore = st.text_input("Codice", key=f"v_{i}", label_visibility="collapsed", placeholder="Codice...")
             
         with col_dl:
             if valore and tipo != "-":
+                # NOME ATTACCATO ISP_TIPOVALORE.pdf
                 nome_finale = f"ISP_{tipo}{valore}.pdf"
                 files_to_zip.append({"name": nome_finale, "bytes": current_file_bytes})
                 st.download_button("💾", current_file_bytes, file_name=nome_finale, key=f"d_{i}", use_container_width=True)
         
-    # --- SIDEBAR DOWNLOAD ---
+    # --- SIDEBAR DOWNLOAD MASSIVO ---
     if files_to_zip:
         st.sidebar.header("📦 Scarico Massivo")
-        st.sidebar.success(f"Pronti: {len(files_to_zip)} / {len(uploaded_files)}")
+        st.sidebar.success(f"File pronti: {len(files_to_zip)} / {len(uploaded_files)}")
         
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -109,13 +136,13 @@ if uploaded_files:
         st.sidebar.download_button(
             label="🚀 SCARICA TUTTO (.ZIP)",
             data=zip_buffer.getvalue(),
-            file_name="Archivio_Rinominati.zip",
+            file_name="Archivio_Documenti.zip",
             mime="application/zip",
             use_container_width=True
         )
 else:
-    st.info("Trascina i file per iniziare.")
+    st.info("Trascina i file PDF per iniziare.")
 
-# Tasto per pulire la sessione
+# Tasto per resettare tutto
 if st.sidebar.button("🗑️ Pulisci tutto"):
     st.rerun()
