@@ -11,11 +11,11 @@ st.markdown("""
     .stApp { background-color: white; }
     h1, h2, h3, p, label, span { color: #002D62 !important; }
     div[data-testid="stExpander"] { border: 2px solid #002D62 !important; background-color: #f8f9fa !important; }
-    div[data-testid="stPopoverContent"] { width: 600px !important; }
     .stColumn { padding: 0.1rem 0rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
+# --- 2. FUNZIONI TECNICHE ---
 def get_pdf_preview_image(file_bytes):
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -28,24 +28,27 @@ def get_pdf_preview_image(file_bytes):
     except: return None
     return None
 
-# --- 2. LOGICA DI STATO ---
-if 'master_val' not in st.session_state:
-    st.session_state.master_val = "-"
+# Funzione per forzare l'aggiornamento di tutte le righe
+def update_all():
+    for key in st.session_state.keys():
+        if key.startswith("t_"): # Cerca tutte le chiavi dei selectbox delle righe
+            st.session_state[key] = st.session_state.master_selector
 
 # --- 3. INTERFACCIA ---
 st.title("📄 PDF Manager Turbo - Ale")
 
+opzioni = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"]
+
 # Pannello Master
 st.markdown("### 🛠️ Configurazione Rapida")
 with st.expander("IMPOSTA TIPO DOCUMENTO PER TUTTI", expanded=True):
-    opzioni = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"]
-    # Usiamo on_change per forzare l'aggiornamento
-    master_selection = st.selectbox(
-        "Seleziona il tipo (es. CMR) per applicarlo automaticamente a ogni riga sotto:",
+    # Il segreto è l'on_change: appena tocchi questo, parte la funzione update_all
+    st.selectbox(
+        "Seleziona il tipo e verrà applicato istantaneamente a tutte le righe:",
         opzioni,
-        index=opzioni.index(st.session_state.master_val)
+        key="master_selector",
+        on_change=update_all
     )
-    st.session_state.master_val = master_selection
 
 uploaded_files = st.file_uploader("Trascina i PDF qui", type="pdf", accept_multiple_files=True)
 
@@ -65,6 +68,13 @@ if uploaded_files:
         col_nome, col_preview, col_input, col_dl = st.columns([2, 0.6, 2.2, 1.2])
         current_file_bytes = file.getvalue()
         
+        # Chiave per il selectbox di questa riga
+        row_key = f"t_{i}"
+        
+        # Se la riga non ha ancora un valore, gli diamo quello del master
+        if row_key not in st.session_state:
+            st.session_state[row_key] = st.session_state.master_selector
+
         with col_nome:
             st.text(file.name[:30] + "..." if len(file.name) > 30 else file.name)
         
@@ -77,11 +87,10 @@ if uploaded_files:
         with col_input:
             c_tipo, c_val = st.columns([0.4, 0.6])
             with c_tipo:
-                # Forza il valore del selectbox a seguire il Master
+                # Il selectbox ora è collegato direttamente alla session_state
                 tipo = st.selectbox(
                     "T", opzioni, 
-                    index=opzioni.index(st.session_state.master_val), 
-                    key=f"t_{i}", 
+                    key=row_key, 
                     label_visibility="collapsed"
                 )
             with c_val:
@@ -111,6 +120,7 @@ if uploaded_files:
             use_container_width=True
         )
 
-if st.sidebar.button("🗑️ Reset"):
-    st.session_state.master_val = "-"
+if st.sidebar.button("🗑️ Reset Totale"):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.rerun()
