@@ -97,4 +97,33 @@ if uploaded_files:
                 st.download_button(
                     label="💾 Salva", 
                     data=current_file_bytes, 
-                    file_name=nome_finale,
+                    file_name=nome_finale, 
+                    key=f"d_{i}",
+                    use_container_width=True
+                )
+        st.divider()
+
+    # --- SIDEBAR PER SCARICO MASSIVO ---
+    if files_to_zip:
+        st.sidebar.header("📦 Download Massivo")
+        st.sidebar.info(f"File pronti per lo ZIP: {len(files_to_zip)} / {len(uploaded_files)}")
+        
+        # Creazione dello ZIP in memoria
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for f in files_to_zip:
+                zip_file.writestr(f["name"], f["bytes"])
+        
+        st.sidebar.download_button(
+            label="🚀 SCARICA TUTTI (ZIP)",
+            data=zip_buffer.getvalue(),
+            file_name="Documenti_Rinominati_Ale.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
+    else:
+        st.sidebar.warning("Inserisci i codici per attivare lo scarico massivo.")
+
+else:
+    st.info("Trascina i file PDF per iniziare il lavoro.")
+    st.sidebar.write("Carica dei file per vedere le opzioni di scarico.")
