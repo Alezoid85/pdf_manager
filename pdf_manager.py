@@ -39,34 +39,39 @@ st.title("📄 PDF Manager Turbo - Ale")
 
 opzioni = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"]
 
-# Pannello Master
-st.markdown("### 🛠️ Configurazione Rapida")
-with st.expander("IMPOSTA TIPO MENU PER TUTTI E INCOLLO MASSIVO", expanded=True):
-    col_m1, col_m2 = st.columns([1, 2])
-    with col_m1:
-        st.selectbox(
-            "Tipo Documento:",
-            opzioni,
-            key="master_selector",
-            on_change=update_all_types
-        )
-    with col_m2:
-        # Area dedicata all'incollo per forzare il popolamento delle righe
-        paste_area = st.text_area("Incolla qui le righe da Excel (Tracking) per distribuirle:", 
-                                   key="excel_paste", 
-                                   height=60,
-                                   placeholder="Copia la colonna da Excel e incolla qui...")
+# Pannello Master con Incollo Multiplo per tutte le colonne
+st.markdown("### 🛠️ Configurazione Rapida e Incollo Excel")
+with st.expander("INCOLLA QUI LE COLONNE DA EXCEL", expanded=True):
+    # Riga per il menu a tendina universale
+    st.selectbox("Imposta Tipo Documento (Menu) per tutti:", opzioni, key="master_selector", on_change=update_all_types)
+    
+    st.markdown("---")
+    st.write("Copia una colonna da Excel e incollala nel box corrispondente:")
+    m1, m2, m3, m4 = st.columns(4)
+    with m1: st.text_area("Incolla Tracking", key="p_track", height=80, placeholder="Colonna Tracking...")
+    with m2: st.text_area("Incolla Spedizione", key="p_sped", height=80, placeholder="Colonna Spedizione...")
+    with m3: st.text_area("Incolla Data", key="p_data", height=80, placeholder="Colonna Data...")
+    with m4: st.text_area("Incolla Documento", key="p_doc", height=80, placeholder="Colonna Documento...")
 
 uploaded_files = st.file_uploader("Trascina i PDF qui", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
-    # Gestione Incollo Massivo prima del ciclo di rendering
-    if st.session_state.excel_paste:
-        lines = [line.strip() for line in st.session_state.excel_paste.split("\n") if line.strip()]
-        for idx, line in enumerate(lines):
-            if idx < len(uploaded_files):
-                st.session_state[f"tr_{idx}"] = line
+    # --- LOGICA DI DISTRIBUZIONE DATI ---
+    # Gestiamo l'incollo per ogni colonna
+    pastes = {
+        "tr_": st.session_state.p_track,
+        "sp_": st.session_state.p_sped,
+        "dt_": st.session_state.p_data,
+        "dc_": st.session_state.p_doc
+    }
     
+    for prefix, raw_text in pastes.items():
+        if raw_text:
+            lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
+            for idx, line in enumerate(lines):
+                if idx < len(uploaded_files):
+                    st.session_state[f"{prefix}{idx}"] = line
+
     files_to_zip = []
     st.markdown("---")
     
@@ -87,13 +92,13 @@ if uploaded_files:
         
         current_file_bytes = file.getvalue()
         
-        # Stato Menu
+        # Inizializzazione stato Menu
         row_key_menu = f"t_{i}"
         if row_key_menu not in st.session_state:
             st.session_state[row_key_menu] = st.session_state.master_selector
 
         with c_nome:
-            st.text(file.name[:20] + ".." if len(file.name) > 20 else file.name)
+            st.text(file.name[:18] + ".." if len(file.name) > 18 else file.name)
         
         with c_prev:
             with st.popover("👁️"):
@@ -105,24 +110,21 @@ if uploaded_files:
             tipo_menu = st.selectbox("M", opzioni, key=row_key_menu, label_visibility="collapsed")
             
         with c_track:
-            track = st.text_input("Trk", key=f"tr_{i}", label_visibility="collapsed", placeholder="Tracking...")
+            track = st.text_input("Trk", key=f"tr_{i}", label_visibility="collapsed")
             
         with c_sped:
-            sped = st.text_input("Sped", key=f"sp_{i}", label_visibility="collapsed", placeholder="Spedizione...")
+            sped = st.text_input("Sped", key=f"sp_{i}", label_visibility="collapsed")
             
         with c_data:
-            data_val = st.text_input("Data", key=f"dt_{i}", label_visibility="collapsed", placeholder="Data...")
+            data_val = st.text_input("Data", key=f"dt_{i}", label_visibility="collapsed")
             
         with c_doc:
-            doc_val = st.text_input("Doc", key=f"dc_{i}", label_visibility="collapsed", placeholder="Documento...")
+            doc_val = st.text_input("Doc", key=f"dc_{i}", label_visibility="collapsed")
             
         with c_dl:
-            # Formato: ISP_TipoTrack - Spedizione - Data - Documento
-            prefix = f"ISP_{tipo_menu}" if tipo_menu != "-" else "ISP"
-            
-            # Costruiamo il nome assicurandoci che il trattino ci sia come richiesto
-            # "ISP_AWBTracking - Spedizione - Data - Documento"
-            nome_finale = f"{prefix}{track} - {sped} - {data_val} - {doc_val}.pdf"
+            # Formato richiesto: ISP_AWBTracking - Spedizione - Data - Documento
+            prefix_file = f"ISP_{tipo_menu}" if tipo_menu != "-" else "ISP"
+            nome_finale = f"{prefix_file}{track} - {sped} - {data_val} - {doc_val}.pdf"
             
             files_to_zip.append({"name": nome_finale, "bytes": current_file_bytes})
             st.download_button("💾", current_file_bytes, file_name=nome_finale, key=f"d_{i}", use_container_width=True)
@@ -140,7 +142,7 @@ if uploaded_files:
         st.sidebar.download_button(
             "🚀 SCARICA TUTTI (.ZIP)",
             buf.getvalue(),
-            "Documenti_Ale_Turbo.zip",
+            "Documenti_Rinominati.zip",
             "application/zip",
             use_container_width=True
         )
