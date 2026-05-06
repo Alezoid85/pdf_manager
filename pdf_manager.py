@@ -34,18 +34,6 @@ def update_all_types():
         if key.startswith("t_"):
             st.session_state[key] = st.session_state.master_selector
 
-def handle_excel_paste(index, uploaded_files):
-    # Recuperiamo il valore appena inserito nel campo tracking
-    input_key = f"tr_{index}"
-    pasted_value = st.session_state[input_key]
-    
-    if "\n" in pasted_value:
-        lines = [line.strip() for line in pasted_value.split("\n") if line.strip()]
-        for i, line in enumerate(lines):
-            target_idx = index + i
-            if target_idx < len(uploaded_files):
-                st.session_state[f"tr_{target_idx}"] = line
-
 # --- 3. INTERFACCIA ---
 st.title("📄 PDF Manager Turbo - Ale")
 
@@ -53,21 +41,36 @@ opzioni = ["-", "AWB", "CMR", "BDC", "POD", "MRN", "ESITO"]
 
 # Pannello Master
 st.markdown("### 🛠️ Configurazione Rapida")
-with st.expander("IMPOSTA TIPO MENU PER TUTTI", expanded=True):
-    st.selectbox(
-        "Seleziona il tipo dal menu e verrà applicato a tutte le righe:",
-        opzioni,
-        key="master_selector",
-        on_change=update_all_types
-    )
+with st.expander("IMPOSTA TIPO MENU PER TUTTI E INCOLLO MASSIVO", expanded=True):
+    col_m1, col_m2 = st.columns([1, 2])
+    with col_m1:
+        st.selectbox(
+            "Tipo Documento:",
+            opzioni,
+            key="master_selector",
+            on_change=update_all_types
+        )
+    with col_m2:
+        # Area dedicata all'incollo per forzare il popolamento delle righe
+        paste_area = st.text_area("Incolla qui le righe da Excel (Tracking) per distribuirle:", 
+                                   key="excel_paste", 
+                                   height=60,
+                                   placeholder="Copia la colonna da Excel e incolla qui...")
 
 uploaded_files = st.file_uploader("Trascina i PDF qui", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
+    # Gestione Incollo Massivo prima del ciclo di rendering
+    if st.session_state.excel_paste:
+        lines = [line.strip() for line in st.session_state.excel_paste.split("\n") if line.strip()]
+        for idx, line in enumerate(lines):
+            if idx < len(uploaded_files):
+                st.session_state[f"tr_{idx}"] = line
+    
     files_to_zip = []
     st.markdown("---")
     
-    # Intestazione Colonne (7 colonne cariche di dati)
+    # Intestazione Colonne
     h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.2, 0.4, 0.8, 1.2, 1.2, 1.2, 1.2, 0.6])
     h1.write("**Originale**")
     h2.write("**Vedi**")
@@ -84,7 +87,7 @@ if uploaded_files:
         
         current_file_bytes = file.getvalue()
         
-        # Gestione stato Menu Tendina
+        # Stato Menu
         row_key_menu = f"t_{i}"
         if row_key_menu not in st.session_state:
             st.session_state[row_key_menu] = st.session_state.master_selector
@@ -102,9 +105,7 @@ if uploaded_files:
             tipo_menu = st.selectbox("M", opzioni, key=row_key_menu, label_visibility="collapsed")
             
         with c_track:
-            # Funzione trigger per l'incollo da Excel
-            track = st.text_input("Trk", key=f"tr_{i}", label_visibility="collapsed", 
-                                  placeholder="Incolla Tracking...", on_change=handle_excel_paste, args=(i, uploaded_files))
+            track = st.text_input("Trk", key=f"tr_{i}", label_visibility="collapsed", placeholder="Tracking...")
             
         with c_sped:
             sped = st.text_input("Sped", key=f"sp_{i}", label_visibility="collapsed", placeholder="Spedizione...")
@@ -116,19 +117,15 @@ if uploaded_files:
             doc_val = st.text_input("Doc", key=f"dc_{i}", label_visibility="collapsed", placeholder="Documento...")
             
         with c_dl:
-            # Costruzione nome: ISP_AWB[Tracking] - [Spedizione] - [Data] - [Documento]
-            # Usiamo AWB fisso come da tuo esempio ISP_AWB... o dinamico dal menu? 
-            # Nel dubbio ho messo ISP_ + SceltaMenu + Tracking.
+            # Formato: ISP_TipoTrack - Spedizione - Data - Documento
             prefix = f"ISP_{tipo_menu}" if tipo_menu != "-" else "ISP"
             
-            nome_parti = [f"{prefix}{track}", sped, data_val, doc_val]
-            # Uniamo con " - " solo le parti che non sono vuote
-            nome_pulito = " - ".join([p for p in nome_parti if p.strip()])
-            nome_finale = f"{nome_pulito}.pdf"
+            # Costruiamo il nome assicurandoci che il trattino ci sia come richiesto
+            # "ISP_AWBTracking - Spedizione - Data - Documento"
+            nome_finale = f"{prefix}{track} - {sped} - {data_val} - {doc_val}.pdf"
             
-            if track or sped: # Attiviamo il download se c'è almeno un dato
-                files_to_zip.append({"name": nome_finale, "bytes": current_file_bytes})
-                st.download_button("💾", current_file_bytes, file_name=nome_finale, key=f"d_{i}", use_container_width=True)
+            files_to_zip.append({"name": nome_finale, "bytes": current_file_bytes})
+            st.download_button("💾", current_file_bytes, file_name=nome_finale, key=f"d_{i}", use_container_width=True)
         
     # Sidebar ZIP
     if files_to_zip:
@@ -143,7 +140,7 @@ if uploaded_files:
         st.sidebar.download_button(
             "🚀 SCARICA TUTTI (.ZIP)",
             buf.getvalue(),
-            "Documenti_Ale_Update.zip",
+            "Documenti_Ale_Turbo.zip",
             "application/zip",
             use_container_width=True
         )
